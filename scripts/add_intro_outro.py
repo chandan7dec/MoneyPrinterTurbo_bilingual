@@ -23,7 +23,33 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
-FONT_DIR = Path.home() / "MoneyPrinterTurbo" / "resource" / "fonts"
+# Fonts live in the repo checkout first; fall back to the historical install
+# location (~/MoneyPrinterTurbo). Resolving from this file keeps the script
+# working from any cwd — and from git clones like Google Colab, where the old
+# hard-coded home-directory path existed but was empty, crashing card renders
+# with "no usable font found" (which silently degraded videos to no cards).
+_FONT_CANDIDATE_DIRS = (
+    Path(__file__).resolve().parents[1] / "resource" / "fonts",
+    Path.home() / "MoneyPrinterTurbo" / "resource" / "fonts",
+)
+
+
+def _find_font(name: str) -> Path | None:
+    for directory in _FONT_CANDIDATE_DIRS:
+        candidate = directory / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _require_font(name: str) -> Path:
+    found = _find_font(name)
+    if found is None:
+        searched = ", ".join(str(d) for d in _FONT_CANDIDATE_DIRS)
+        raise SystemExit(f"font not found: {name} (searched: {searched})")
+    return found
+
+
 DEVANAGARI_RE = re.compile(r"[\u0900-\u097F]")
 CROSSFADE = 0.6
 
@@ -339,18 +365,27 @@ def wrap_text(draw, text, font, max_width):
 
 def pick_font(size, bold=True, devanagari=False):
     if devanagari:
-        dev = FONT_DIR / "NotoSansDevanagari-Bold.ttf"
-        if dev.exists():
+        dev = _find_font("NotoSansDevanagari-Bold.ttf")
+        if dev is not None:
             return ImageFont.truetype(str(dev), size)
+        # Devanagari requested but the bundled font is missing: crash loudly
+        # instead of rendering tofu boxes that ruin the cards.
+        raise SystemExit(
+            "Devanagari title but NotoSansDevanagari-Bold.ttf not found in "
+            + ", ".join(str(d) for d in _FONT_CANDIDATE_DIRS)
+        )
     candidates = [
-        FONT_DIR / ("BeVietnamPro-Bold.ttf" if bold else "BeVietnamPro-Medium.ttf"),
-        FONT_DIR / "MicrosoftYaHeiBold.ttc",
-        FONT_DIR / "STHeitiMedium.ttc",
+        ("BeVietnamPro-Bold.ttf" if bold else "BeVietnamPro-Medium.ttf"),
+        "MicrosoftYaHeiBold.ttc",
+        "STHeitiMedium.ttc",
     ]
-    for c in candidates:
-        if c.exists():
-            return ImageFont.truetype(str(c), size)
-    raise SystemExit(f"no usable font found in {FONT_DIR}")
+    for name in candidates:
+        found = _find_font(name)
+        if found is not None:
+            return ImageFont.truetype(str(found), size)
+    raise SystemExit(
+        "no usable font found in " + ", ".join(str(d) for d in _FONT_CANDIDATE_DIRS)
+    )
 
 
 def make_card(

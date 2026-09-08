@@ -2,6 +2,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import uuid
 from collections import deque
@@ -117,9 +118,13 @@ def _add_intro_outro_cards(
     if not _INTRO_OUTRO_SCRIPT.is_file():
         logger.warning(f"intro/outro script not found, skipping: {_INTRO_OUTRO_SCRIPT}")
         return result
-    uv = shutil.which("uv")
-    if not uv:
-        logger.warning("uv not found, skipping intro/outro cards")
+    # Run the card script with the SAME interpreter that runs this process.
+    # Requiring the external "uv" binary made the step silently skip on
+    # machines without uv (Google Colab, plain venv installs) — the video
+    # rendered fine but never got its intro/outro cards.
+    python_cmd = sys.executable or shutil.which("python") or shutil.which("python3")
+    if not python_cmd:
+        logger.warning("no python interpreter found, skipping intro/outro cards")
         return result
 
     subject = str(params.video_subject or "").strip()
@@ -136,7 +141,7 @@ def _add_intro_outro_cards(
             logger.info(f"adding intro/outro cards: {video_path.name}")
             proc = subprocess.run(
                 [
-                    uv, "run", "python", str(_INTRO_OUTRO_SCRIPT),
+                    str(python_cmd), str(_INTRO_OUTRO_SCRIPT),
                     "--video", str(video_path),
                     "--title", title,
                     "--voice", voice,

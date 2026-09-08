@@ -1,0 +1,8 @@
+# Project-level Streamlit theme — committed so every clone (GitHub, Google
+# Colab) gets the same dark UI as the local `webui.bat` launch.
+[theme]
+base = "dark"
+primaryColor = "#7c5cff"
+
+[browser]
+gatherUsageStats = false

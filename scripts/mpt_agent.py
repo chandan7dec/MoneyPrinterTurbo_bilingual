@@ -535,9 +535,11 @@ def run_intro_outro(
     if not script.is_file():
         log(f"intro/outro script not found, skipping: {script}")
         return videos
-    uv = shutil.which("uv")
-    if not uv:
-        log("uv not found, skipping intro/outro cards")
+    # Use the same interpreter running this process — requiring the external
+    # "uv" binary made intro/outro silently skip on hosts without uv (Colab).
+    python_cmd = sys.executable or shutil.which("python") or shutil.which("python3")
+    if not python_cmd:
+        log("no python interpreter found, skipping intro/outro cards")
         return videos
     voice = _extract_voice_name(cli_args)
     enhanced: list[Path] = []
@@ -548,7 +550,7 @@ def run_intro_outro(
             out = video.with_name(f"{video.stem}-cards.mp4")
         log(f"adding intro/outro cards: {video.name} -> {out.name}")
         result = subprocess.run(
-            [uv, "run", "python", str(script),
+            [str(python_cmd), str(script),
              "--video", str(video),
              "--title", subject,
              "--voice", voice,
