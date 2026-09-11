@@ -5583,15 +5583,27 @@ def _render_audio_settings(panel, params):
                     saved_voice_name
                 )
             else:
-                # 如果不在，则根据当前UI语言选择一个默认声音
-                for i, v in enumerate(filtered_voices):
-                    if v.lower().startswith(st.session_state["ui_language"].lower()):
-                        saved_voice_name_index = i
-                        break
-
-            # 如果没有找到匹配的声音，使用第一个声音
-            if saved_voice_name_index >= len(friendly_names) and friendly_names:
-                saved_voice_name_index = 0
+                # 保存的声音不在当前列表（例如官方下线/列表刷新）。按当前 UI
+                # 语言前缀匹配一个同语言的默认声音，避免落到字母序第一个
+                # （af-ZA-Adri...，南非荷兰语），导致英语视频配上外语口音。
+                language_fallback = next(
+                    (
+                        i
+                        for i, v in enumerate(filtered_voices)
+                        if v.lower().startswith(
+                            st.session_state["ui_language"].lower()
+                        )
+                    ),
+                    None,
+                )
+                if language_fallback is None:
+                    # 语言前缀也匹配不到时，使用标准英语（美音）保底。
+                    language_fallback = (
+                        list(friendly_names.keys()).index("en-US-JennyNeural")
+                        if "en-US-JennyNeural" in friendly_names
+                        else 0
+                    )
+                saved_voice_name_index = language_fallback
 
             # 确保有声音可选
             if tts_mode_enabled and friendly_names:

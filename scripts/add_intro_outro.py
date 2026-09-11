@@ -16,12 +16,44 @@ Usage:
 import argparse
 import asyncio
 import io
+import os
 import random
 import re
 import subprocess
+import sys
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+
+def _ensure_raqm_shaping() -> None:
+    """Make Pillow's Raqm complex-text shaping work on Windows.
+
+    Pillow's `_imagingft` extension loads ``libfribidi-0.dll`` via a plain
+    ``LoadLibrary`` that searches PATH but not the package directory. Without
+    it, Raqm stays off and Devanagari titles render with broken shaping (half
+    letters, reph, matra reordering). We point PATH at the repo-vendored DLL
+    (``app/libs``) — or a venv copy — *before* PIL is imported.
+    """
+    if sys.platform != "win32" or os.environ.get("MPT_SKIP_RAQM_BOOTSTRAP"):
+        return
+    for base in (
+        Path(__file__).resolve().parents[1] / "app" / "libs",
+        Path(sys.prefix) / "Lib" / "site-packages" / "PIL",
+    ):
+        if (base / "libfribidi-0.dll").is_file():
+            dll_dir = str(base)
+            try:
+                os.add_dll_directory(dll_dir)
+            except (AttributeError, OSError):
+                pass
+            path_value = os.environ.get("PATH", "")
+            if dll_dir.lower() not in path_value.lower():
+                os.environ["PATH"] = dll_dir + os.pathsep + path_value
+            return
+
+
+_ensure_raqm_shaping()
+
+from PIL import Image, ImageDraw, ImageFont, ImageFilter  # noqa: E402  (must stay after the DLL bootstrap)
 
 # Fonts live in the repo checkout first; fall back to the historical install
 # location (~/MoneyPrinterTurbo). Resolving from this file keeps the script
